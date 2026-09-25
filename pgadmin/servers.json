@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "analysis-db",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "test_task",
+      "Username": "postgres",
+      "SSLMode": "prefer",
+      "ConnectionTimeout": 10
+    }
+  }
+}

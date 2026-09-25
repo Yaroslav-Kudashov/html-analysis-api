@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:18
+    container_name: analysis-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: test_task
+      # подключение к базе без пароля (trust) — так требует ТЗ
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      # состояние базы переживает перезапуски контейнеров и сам compose-проект;
+      # в postgres:18 данные кладутся в подкаталог по версии, поэтому монтируем /var/lib/postgresql целиком
+      - pgdata:/var/lib/postgresql
+    ports:
+      # порт проброшен наружу для локального запуска приложения из IDE (Rider/VS)
+      # против базы из compose; в самой compose-сети api ходит в db:5432
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d test_task"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: analysis-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      # без экранов входа: десктопный режим и без master password
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_CONFIG_UPGRADE_CHECK: "False"
+    volumes:
+      # сервер analysis-db уже настроен, база принимает подключения без пароля
+      - ./pgadmin/servers.json:/pgadmin4/servers.json
+    ports:
+      - "8080:80"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    container_name: analysis-api
+    working_dir: /src/src/AnalysisApi
+    # исходники примонтированы в контейнер, билд происходит при каждом запуске
+    command: sh -c "dotnet run --no-launch-profile"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: "Host=db;Port=5432;Username=postgres;Database=test_task"
+    volumes:
+      - .:/src
+      # кеш nuget между перезапусками, чтобы не качать пакеты заново
+      - nuget_cache:/root/.nuget/packages
+    ports:
+      - "8090:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  nuget_cache:
